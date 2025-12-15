@@ -1,44 +1,67 @@
-name: CI - Build & Verify Chat App
+name: CI - Build & Test
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
 
 jobs:
-  build-and-verify:
+  build-and-test:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Checkout code
-      - name: Checkout repository
+      - name: Récupérer le code source
         uses: actions/checkout@v4
 
-      # 2️⃣ Setup Node.js
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 18
+      - name: Installer Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-      # 3️⃣ Backend build & test
-      - name: Install backend dependencies
+      - name: Installer Docker Compose
         run: |
-          cd backend
-          npm install
+          sudo curl -L "https://github.com/docker/compose/releases/download/v2.29.7/docker-compose-$(uname -s)-$(uname -m)" \
+            -o /usr/local/bin/docker-compose
+          sudo chmod +x /usr/local/bin/docker-compose
+          docker-compose --version
 
-      - name: Test backend (optional)
+      - name: Construire les images Docker
         run: |
-          cd backend
-          npm test || echo "No tests defined"
+          docker build -t tp-backend ./backend
+          docker build -t tp-frontend ./frontend
 
-      # 4️⃣ Build Docker images (sanity check)
-      - name: Build Docker images
-        run: docker-compose build
 
-      # 5️⃣ Confirmation logs
-      - name: Deployment info
+      - name: Démarrer les services en arrière-plan
         run: |
-          echo "✅ Build successful!"
-          echo "➡️ Frontend auto-deployed via Vercel"
-          echo "➡️ Backend auto-deployed via Render"
-          echo "ℹ️ CI/CD complete - no secrets used"
+          docker-compose up -d
+
+      - name: Attendre que le backend soit prêt (max 60s)
+        run: |
+          echo "Attente du backend (max 60s)..."
+          for i in {1..30}; do
+            if curl -f http://localhost:3000/api > /dev/null 2>&1; then
+              echo "Backend est prêt !"
+              break
+            fi
+            echo "En attente... ($i/30)"
+            sleep 2
+          done
+          if [ $i -eq 30 ]; then
+            echo "Timeout : backend non démarré"
+            exit 1
+          fi
+
+      - name: Tester l'endpoint /api
+        run: |
+          echo "Test de l'endpoint /api"
+          curl -f http://localhost:3000/api
+
+      - name: Tester l'endpoint /db
+        run: |
+          echo "Test de l'endpoint /db"
+          curl -f http://localhost:3000/api
+
+      - name: Afficher les logs en cas d'échec
+        if: failure()
+        run: |
+          echo "Logs des conteneurs :"
+          docker-compose logs

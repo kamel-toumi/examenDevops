@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mini Chat</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; background: #f0f0f0; }
+    h1 { text-align: center; }
+    #messages { height: 70vh; overflow-y: auto; background: white; border: 1px solid #ccc; padding: 10px; margin-bottom: 20px; }
+    .message { margin: 10px 0; padding: 8px; background: #e9e9e9; border-radius: 8px; }
+    .author { font-weight: bold; }
+    .time { font-size: 0.8em; color: #666; }
+    form { display: flex; flex-direction: column; gap: 10px; }
+    input, button { padding: 10px; font-size: 1em; }
+    button { background: #007bff; color: white; border: none; cursor: pointer; }
+    @media (min-width: 600px) {
+      form { flex-direction: row; }
+      button { width: 150px; }
+    }
+  </style>
+</head>
+<body>
+  <h1>Mini Chat en temps réel</h1>
+
+  <div id="messages"></div>
+
+  <form id="form">
+    <input type="text" id="pseudo" placeholder="Votre pseudo" required>
+    <input type="text" id="message" placeholder="Votre message" required>
+    <button type="submit">Envoyer</button>
+  </form>
+
+  <script>
+    const BACKEND_URL = 'http://localhost:3000'; // À remplacer par l'URL Render après déploiement
+
+    const messagesDiv = document.getElementById('messages');
+    const form = document.getElementById('form');
+    const pseudoInput = document.getElementById('pseudo');
+    const messageInput = document.getElementById('message');
+
+    let pseudo = '';
+
+    // Charger les messages
+    async function loadMessages() {
+      try {
+        const res = await fetch(`${BACKEND_URL}/api/messages`);
+        const msgs = await res.json();
+        messagesDiv.innerHTML = '';
+        msgs.forEach(msg => {
+          const div = document.createElement('div');
+          div.className = 'message';
+          div.innerHTML = `<span class="author">${msg.author}</span>: ${msg.content} <span class="time">(${new Date(msg.timestamp).toLocaleTimeString()})</span>`;
+          messagesDiv.appendChild(div);
+        });
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    // Envoyer un message
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!pseudo) pseudo = pseudoInput.value.trim();
+      if (!pseudo || !messageInput.value.trim()) return;
+
+      await fetch(`${BACKEND_URL}/api/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ author: pseudo, content: messageInput.value.trim() })
+      });
+      messageInput.value = '';
+      loadMessages();
+    });
+
+    // Polling toutes les 4 secondes
+    loadMessages();
+    setInterval(loadMessages, 4000);
+  </script>
+</body>
+</html>
